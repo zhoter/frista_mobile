@@ -1,0 +1,112 @@
+name: Python
+
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - ".github/workflows/build_python.yml"
+    - "**.cpp"
+    - "**.h"
+    - "**.c"
+    - "**.cu"
+    - "**.cmake"
+    - "**CMakeLists.txt"
+    - "**py"
+  pull_request:
+    branches:
+    - master
+    paths:
+    - ".github/workflows/build_python.yml"
+    - "**.cpp"
+    - "**.h"
+    - "**.c"
+    - "**.cu"
+    - "**.cmake"
+    - "**CMakeLists.txt"
+    - "**py"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  Windows:
+    strategy:
+      matrix:
+        os:
+          - windows-latest
+          - windows-11-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.13'
+    - name: Install python deps
+      run: |
+        pip install pytest numpy setuptools packaging
+        pip3 install cmake
+    - name: Build
+      run: |
+        pip3 install cmake
+        pip3 install .
+    - name: Test
+      run: python -m pytest --ignore docs --ignore dlib
+
+  Ubuntu:
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+    - name: Install python deps
+      run: pip install pytest numpy setuptools packaging
+    - name: Build
+      run: |
+        pip install .
+    - name: Test
+      run: python -m pytest --ignore docs --ignore dlib
+
+  Ubuntu-Free-Threaded:
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.13t'
+    - name: Install python deps
+      run: pip install pytest numpy setuptools packaging
+    - name: Build
+      run: pip install .
+    - name: Verify free-threading
+      run: python -c "import sys; assert not sys._is_gil_enabled()"
+    - name: Test
+      run: python -m pytest --ignore docs --ignore dlib
+
+  Ubuntu-Python-3-8:
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
+      with:
+        python-version: '3.8'
+    - name: Install python deps
+      run: pip install pytest numpy setuptools packaging
+    - name: Build
+      run: pip install .
+    - name: Test
+      run: python -m pytest --ignore docs --ignore dlib
+
+# Disabled for now since something is going sideways with python packages on github actions
+# MacOS:
+#   runs-on: 'macos-latest'
+#   steps:
+#   - uses: actions/checkout@v3
+#   - uses: actions/setup-python@v4
+#   - name: Install python deps
+#     run: pip3 install pytest numpy
+#   - name: Build
+#     run: |
+#       pip install .
+#   - name: Test
+#     run: python3 -m pytest --ignore docs --ignore dlib

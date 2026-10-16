@@ -1,0 +1,54 @@
+name: Matlab
+
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - ".github/workflows/build_matlab.yml"
+    - "**.cpp"
+    - "**.h"
+    - "**.c"
+    - "**.cu"
+    - "**.cmake"
+    - "**CMakeLists.txt"
+  pull_request:
+    branches:
+    - master
+    paths:
+    - ".github/workflows/build_matlab.yml"
+    - "**.cpp"
+    - "**.h"
+    - "**.c"
+    - "**.cu"
+    - "**.cmake"
+    - "**CMakeLists.txt"
+
+defaults:
+  run:
+    shell: bash
+    working-directory: dlib/matlab
+
+
+jobs:
+  mex-wrapper:
+    runs-on: 'ubuntu-22.04'
+    steps:
+    - uses: actions/checkout@v5
+    - name: Setup MATLAB
+      uses: matlab-actions/setup-matlab@v3
+      with:
+        release: R2024a
+    - name: Compile mex wrappers 
+      run: |
+        pwd
+        mkdir build
+        cd build
+        cmake ..
+        cmake --build . --config Release --target install --parallel 4
+    - name: Run example script
+      uses: matlab-actions/run-command@v3
+      with:
+        command: cd dlib/matlab; example
+
+
