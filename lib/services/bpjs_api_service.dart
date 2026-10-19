@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/patient_info.dart';
 import 'dlib_service.dart';
 
-class BpjsApiService {
+class BpjsApiService extends ChangeNotifier {
   static const String _keyBaseUrl = 'bpjs_base_url';
   static const String _keyToken = 'bpjs_auth_token';
   static const String _defaultUrl = 'https://frista.bpjs-kesehatan.go.id/frista-api';
@@ -28,13 +28,14 @@ class BpjsApiService {
         _baseUrl = _baseUrl.substring(0, _baseUrl.length - 1);
       }
     }
-    _token = prefs.getString(_keyToken);
+    _token = null;
   }
 
   Future<void> setBaseUrl(String url) async {
     _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyBaseUrl, _baseUrl);
+    notifyListeners();
   }
 
   Future<bool> login(String username, String password) async {
@@ -59,6 +60,7 @@ class BpjsApiService {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_keyToken, _token!);
         }
+        notifyListeners();
         return true;
       } else {
         throw Exception(data['message'] ?? 'Username atau password salah');
@@ -78,6 +80,7 @@ class BpjsApiService {
     _token = null;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyToken);
+    notifyListeners();
   }
 
   Future<PatientInfo?> searchNik(String nik) async {

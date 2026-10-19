@@ -5,7 +5,8 @@ import '../services/bpjs_api_service.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool autoLogin;
+  const LoginScreen({super.key, this.autoLogin = true});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _rememberMe = false;
+  String? _statusMessage;
 
   @override
   void initState() {
@@ -38,6 +40,59 @@ class _LoginScreenState extends State<LoginScreen> {
           _passwordController.text = savedPass;
         }
       });
+
+      // Auto-refresh login to BPJS server if credentials are saved
+      if (widget.autoLogin && remember && savedUser.isNotEmpty && savedPass.isNotEmpty) {
+        _performAutoRefresh(savedUser, savedPass);
+      }
+    }
+  }
+
+  Future<void> _performAutoRefresh(String username, String password) async {
+    final api = context.read<BpjsApiService>();
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Memperbarui status login ke server BPJS...';
+    });
+
+    try {
+      final success = await api.login(username, password);
+      if (!mounted) return;
+      if (success) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+          _statusMessage = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sesi BPJS kadaluarsa. Silakan tekan Masuk untuk login ulang.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _isLoading = false;
+        _statusMessage = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memperbarui status login BPJS: $msg'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 4),
+          action: SnackBarAction(
+            label: 'Coba Lagi',
+            textColor: Colors.white,
+            onPressed: () => _performAutoRefresh(username, password),
+          ),
+        ),
+      );
     }
   }
 
@@ -60,7 +115,10 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _statusMessage = 'Menghubungkan ke server BPJS...';
+    });
     try {
       final success = await api.login(username, password);
       if (!mounted) return;
@@ -92,7 +150,12 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(content: Text(msg)),
       );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _statusMessage = null;
+        });
+      }
     }
   }
 
@@ -191,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const Text(
-                'Bedside & IGD Face Recognition\nBPJS Kesehatan',
+                'Bedside Face Recognition\nBPJS Kesehatan',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14,
@@ -270,13 +333,41 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           onPressed: _isLoading ? null : _handleLogin,
                           child: _isLoading
-                              ? const CircularProgressIndicator(color: Colors.white)
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                                )
                               : const Text(
                                   'Masuk',
                                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                 ),
                         ),
                       ),
+                      if (_isLoading && _statusMessage != null) ...[
+                        const SizedBox(height: 14),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: primaryColor),
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                _statusMessage!,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: primaryColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),

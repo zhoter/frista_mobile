@@ -26,7 +26,7 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               api.logout();
               Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                MaterialPageRoute(builder: (_) => const LoginScreen(autoLogin: false)),
               );
             },
           ),
@@ -64,7 +64,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Unit IGD & Rawat Inap (Bedside)',
+                    'Unit Rawat Inap & Bedside',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -98,13 +98,13 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Card 1: Verifikasi Pasien Bedside / IGD
+            // Card 1: Verifikasi Pasien Bedside
             _buildMenuCard(
               context: context,
               icon: Icons.face_unlock_rounded,
               color: Colors.teal,
-              title: 'Verifikasi Pasien Bedside / IGD',
-              subtitle: 'Scan wajah pasien di ranjang/IGD dengan kamera depan/belakang & lampu senter.',
+              title: 'Verifikasi Pasien Bedside',
+              subtitle: 'Scan wajah pasien di ranjang dengan kamera depan/belakang & lampu senter.',
               badgeText: 'Paling Sering Digunakan',
               onTap: () {
                 Navigator.push(
@@ -173,7 +173,7 @@ class HomeScreen extends StatelessWidget {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Tips IGD: Nyalakan icon senter di pojok kanan atas kamera jika ruangan pasien minim cahaya. Gunakan tombol "Pasien Masker/IGD" jika pasien menggunakan ventilator.',
+                      'Tips Bedside: Nyalakan icon senter di pojok kanan atas kamera jika ruangan pasien minim cahaya. Pastikan wajah pasien menghadap tegak lurus ke kamera.',
                       style: TextStyle(fontSize: 12, color: Colors.black87),
                     ),
                   ),

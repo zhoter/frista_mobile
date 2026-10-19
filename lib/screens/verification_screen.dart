@@ -141,6 +141,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _searchNik() async {
+    FocusScope.of(context).unfocus();
     final nik = _nikController.text.trim();
     if (nik.length < 13) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -170,6 +171,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _scanBarcode() async {
+    FocusScope.of(context).unfocus();
     final result = await Navigator.push<String>(
       context,
       MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
@@ -182,6 +184,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   }
 
   Future<void> _captureAndVerify() async {
+    FocusScope.of(context).unfocus();
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
     if (_patient == null && _nikController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -213,53 +216,6 @@ class _VerificationScreenState extends State<VerificationScreen> {
     } finally {
       if (mounted) setState(() => _isVerifying = false);
     }
-  }
-
-  void _manualMedicalBypass() {
-    final reasonController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Verifikasi Pengecualian Medis (IGD / ICU)'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Gunakan fitur ini jika pasien tidak memungkinkan verifikasi biometrik (masker O2, selang NGT, luka wajah parah, koma):',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonController,
-              decoration: const InputDecoration(
-                labelText: 'Alasan Medis',
-                hintText: 'Misal: Pasien ventilator / luka bakar wajah',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-            onPressed: () {
-              Navigator.pop(ctx);
-              _showResultDialog(
-                VerificationResult(
-                  isSuccess: true,
-                  message: 'Verifikasi Manual Tercatat: ${reasonController.text}',
-                  patientName: _patient?.nama ?? 'Pasien IGD',
-                ),
-                null,
-              );
-            },
-            child: const Text('Verifikasi Manual', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showResultDialog(VerificationResult result, Uint8List? photo) {
@@ -335,6 +291,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     const primaryColor = Color(0xFF088A76);
 
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('Verifikasi Wajah Bedside'),
         backgroundColor: primaryColor,
@@ -364,6 +321,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
                   child: TextField(
                     controller: _nikController,
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.search,
+                    onSubmitted: (_) => _searchNik(),
                     onChanged: (val) {
                       final clean = val.trim();
                       if (clean.length == 16 || clean.length == 13) {
@@ -421,86 +380,86 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
           // Camera Viewport with Oval Guide
           Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (_cameraController != null && _cameraController!.value.isInitialized)
-                  CameraPreview(_cameraController!)
-                else
-                  const Center(child: CircularProgressIndicator()),
+            child: GestureDetector(
+              onTap: () => FocusScope.of(context).unfocus(),
+              behavior: HitTestBehavior.opaque,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (_cameraController != null && _cameraController!.value.isInitialized)
+                    ClipRect(
+                      child: SizedBox.expand(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          child: SizedBox(
+                            width: _cameraController!.value.previewSize?.height ?? 720,
+                            height: _cameraController!.value.previewSize?.width ?? 1280,
+                            child: CameraPreview(_cameraController!),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    const Center(child: CircularProgressIndicator()),
 
-                // Oval Guidance Overlay
-                Center(
-                  child: Container(
-                    width: 240,
-                    height: 310,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _guideColor, width: 3.5),
-                      borderRadius: BorderRadius.circular(150),
-                    ),
-                  ),
-                ),
-
-                // Liveness Banner
-                Positioned(
-                  top: 16,
-                  left: 20,
-                  right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.black87,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      _livenessStatusText,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _guideColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                  // Oval Guidance Overlay
+                  Center(
+                    child: Container(
+                      width: 240,
+                      height: 310,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: _guideColor, width: 3.5),
+                        borderRadius: BorderRadius.circular(150),
                       ),
                     ),
                   ),
-                ),
 
-                // Medical Bypass Button
-                Positioned(
-                  bottom: 90,
-                  left: 20,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.black54,
-                      foregroundColor: Colors.orangeAccent,
-                    ),
-                    icon: const Icon(Icons.medical_services_outlined, size: 18),
-                    label: const Text('Pasien Masker/IGD', style: TextStyle(fontSize: 12)),
-                    onPressed: _manualMedicalBypass,
-                  ),
-                ),
-
-                // Action Capture Button
-                Positioned(
-                  bottom: 16,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: FloatingActionButton(
-                        backgroundColor: _livenessState == LivenessState.ready
-                            ? Colors.green
-                            : primaryColor,
-                        onPressed: _isVerifying ? null : _captureAndVerify,
-                        child: _isVerifying
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Icon(Icons.camera_alt, size: 36, color: Colors.white),
+                  // Liveness Banner
+                  Positioned(
+                    top: 16,
+                    left: 20,
+                    right: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _livenessStatusText,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _guideColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+
+                  // Action Capture Button
+                  Positioned(
+                    bottom: 16,
+                    left: 0,
+                    right: 0,
+                    child: Center(
+                      child: SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: FloatingActionButton(
+                          backgroundColor: _livenessState == LivenessState.ready
+                              ? Colors.green
+                              : primaryColor,
+                          onPressed: _isVerifying ? null : _captureAndVerify,
+                          child: _isVerifying
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Icon(Icons.camera_alt, size: 36, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

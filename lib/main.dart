@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/bpjs_api_service.dart';
 
@@ -10,10 +9,8 @@ void main() async {
   await apiService.init();
 
   runApp(
-    MultiProvider(
-      providers: [
-        Provider<BpjsApiService>.value(value: apiService),
-      ],
+    ChangeNotifierProvider<BpjsApiService>.value(
+      value: apiService,
       child: const FristaMobileApp(),
     ),
   );
@@ -40,11 +37,7 @@ class FristaMobileApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: Consumer<BpjsApiService>(
-        builder: (context, api, _) {
-          return api.isAuthenticated ? const HomeScreen() : const LoginScreen();
-        },
-      ),
+      home: const LoginScreen(autoLogin: true),
     );
   }
 }
