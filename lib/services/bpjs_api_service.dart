@@ -90,6 +90,7 @@ class BpjsApiService extends ChangeNotifier {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
+          'User-Agent': 'Mozilla/5.0',
         },
         body: jsonEncode({'nik': nik}),
       );
