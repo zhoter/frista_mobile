@@ -374,7 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Versi 1.0.0 (Mobile Bedside Edition)\nPengembangan Terintegrasi API BPJS',
+                'Versi 1.0.1 (Mobile Bedside Edition)\nPengembangan Terintegrasi API BPJS',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.black38),
               ),
