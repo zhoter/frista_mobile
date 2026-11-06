@@ -9,6 +9,7 @@ class BpjsApiService extends ChangeNotifier {
   static const String _keyBaseUrl = 'bpjs_base_url';
   static const String _keyToken = 'bpjs_auth_token';
   static const String _defaultUrl = 'https://frista.bpjs-kesehatan.go.id/frista-api';
+  static const String _userAgent = 'python-requests/2.31.0';
 
   String? _token;
   String _baseUrl = _defaultUrl;
@@ -43,7 +44,7 @@ class BpjsApiService extends ChangeNotifier {
       Uri.parse('$_baseUrl/user/login/rs'),
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0',
+        'User-Agent': _userAgent,
       },
       body: jsonEncode({
         'username': username,
@@ -90,7 +91,7 @@ class BpjsApiService extends ChangeNotifier {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $_token',
-          'User-Agent': 'Mozilla/5.0',
+          'User-Agent': _userAgent,
         },
         body: jsonEncode({'nik': nik}),
       );
@@ -148,7 +149,7 @@ class BpjsApiService extends ChangeNotifier {
         headers: {
           'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0',
+          'User-Agent': _userAgent,
         },
         body: jsonEncode({
           'id': nikInt,
@@ -177,7 +178,7 @@ class BpjsApiService extends ChangeNotifier {
           final uploadUri = Uri.parse('$_baseUrl/face/upload');
           final uploadReq = http.MultipartRequest('POST', uploadUri)
             ..headers['Authorization'] = 'Bearer $_token'
-            ..headers['User-Agent'] = 'Mozilla/5.0'
+            ..headers['User-Agent'] = _userAgent
             ..fields['id'] = nik
             ..files.add(
               http.MultipartFile.fromBytes(
@@ -198,7 +199,7 @@ class BpjsApiService extends ChangeNotifier {
                 headers: {
                   'Authorization': 'Bearer $_token',
                   'Content-Type': 'application/json',
-                  'User-Agent': 'Mozilla/5.0',
+                  'User-Agent': _userAgent,
                 },
                 body: jsonEncode({
                   'id': nikInt,
