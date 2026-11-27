@@ -26,11 +26,13 @@ class VerificationResult {
   final String message;
   final String? patientName;
   final double? similarityScore;
+  final bool isNewRegistration;
 
   VerificationResult({
     required this.isSuccess,
     required this.message,
     this.patientName,
     this.similarityScore,
+    this.isNewRegistration = false,
   });
 }

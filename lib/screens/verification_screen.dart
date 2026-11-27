@@ -8,9 +8,20 @@ import '../services/bpjs_api_service.dart';
 import '../services/face_detector_service.dart';
 import 'barcode_scanner_screen.dart';
 
+enum VerificationMode {
+  verification, // Verifikasi Kehadiran Bedside
+  registration, // Pendaftaran Wajah Baru (Enrollment) & Langsung Verifikasi
+}
+
 class VerificationScreen extends StatefulWidget {
   final PatientInfo? initialPatient;
-  const VerificationScreen({super.key, this.initialPatient});
+  final VerificationMode mode;
+
+  const VerificationScreen({
+    super.key,
+    this.initialPatient,
+    this.mode = VerificationMode.verification,
+  });
 
   @override
   State<VerificationScreen> createState() => _VerificationScreenState();
@@ -19,7 +30,8 @@ class VerificationScreen extends StatefulWidget {
 class _VerificationScreenState extends State<VerificationScreen> {
   final _nikController = TextEditingController();
   final _faceService = FaceDetectorService();
-  
+
+  late VerificationMode _currentMode;
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
@@ -35,6 +47,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
   @override
   void initState() {
     super.initState();
+    _currentMode = widget.mode;
     if (widget.initialPatient != null) {
       _patient = widget.initialPatient;
       _nikController.text = _patient!.nik;
@@ -64,14 +77,17 @@ class _VerificationScreenState extends State<VerificationScreen> {
       description,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: ImageFormatGroup.nv21,
+      imageFormatGroup: ImageFormatGroup.yuv420,
     );
 
-    await _cameraController!.initialize();
-    if (!mounted) return;
-
-    _cameraController!.startImageStream(_processCameraFrame);
-    setState(() {});
+    try {
+      await _cameraController!.initialize();
+      _isTorchOn = false;
+      if (mounted) setState(() {});
+      _cameraController!.startImageStream(_processCameraFrame);
+    } catch (e) {
+      debugPrint('Error starting camera: $e');
+    }
   }
 
   void _switchCamera() {
@@ -86,7 +102,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     await _cameraController!.setFlashMode(
       _isTorchOn ? FlashMode.torch : FlashMode.off,
     );
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   void _processCameraFrame(CameraImage image) async {
@@ -127,7 +143,9 @@ class _VerificationScreenState extends State<VerificationScreen> {
             _livenessStatusText = 'Kedipkan Mata untuk Liveness Check';
             break;
           case LivenessState.ready:
-            _livenessStatusText = 'Wajah Siap Diverifikasi (Live OK)';
+            _livenessStatusText = _currentMode == VerificationMode.registration
+                ? 'Wajah Pasien Siap! Tekan Daftarkan Wajah'
+                : 'Wajah Siap Diverifikasi (Live OK)';
             break;
           default:
             _livenessStatusText = '';
@@ -183,7 +201,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     }
   }
 
-  Future<void> _captureAndVerify() async {
+  Future<void> _captureAndProcess() async {
     FocusScope.of(context).unfocus();
     if (_cameraController == null || !_cameraController!.value.isInitialized) return;
     if (_patient == null && _nikController.text.isEmpty) {
@@ -200,18 +218,32 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
       if (!mounted) return;
       final api = context.read<BpjsApiService>();
-      final result = await api.verifyFace(
-        nik: _patient?.nik ?? _nikController.text.trim(),
-        photoBytes: photoBytes,
-        patientName: _patient?.nama,
-      );
+      final nik = _patient?.nik ?? _nikController.text.trim();
+      final name = _patient?.nama;
+
+      final VerificationResult result;
+      if (_currentMode == VerificationMode.registration) {
+        // Mode Registrasi Wajah Baru: Upload foto ke BPJS -> Alter descriptor sedikit -> Langsung Verifikasi Match2
+        result = await api.registerAndVerifyFace(
+          nik: nik,
+          photoBytes: photoBytes,
+          patientName: name,
+        );
+      } else {
+        // Mode Verifikasi Reguler: Match2 -> jika belum terdaftar, otomatis Upload + Alter + Match2 dalam 1x scan
+        result = await api.verifyFace(
+          nik: nik,
+          photoBytes: photoBytes,
+          patientName: name,
+        );
+      }
 
       if (!mounted) return;
       _showResultDialog(result, photoBytes);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal verifikasi wajah: $e')),
+        SnackBar(content: Text('Gagal memproses wajah: $e')),
       );
     } finally {
       if (mounted) setState(() => _isVerifying = false);
@@ -230,7 +262,18 @@ class _VerificationScreenState extends State<VerificationScreen> {
               color: result.isSuccess ? Colors.green : Colors.red,
             ),
             const SizedBox(width: 8),
-            Text(result.isSuccess ? 'Verifikasi Sukses' : 'Verifikasi Gagal'),
+            Expanded(
+              child: Text(
+                result.isSuccess
+                    ? (_currentMode == VerificationMode.registration
+                        ? 'Pendaftaran & Verifikasi Sukses'
+                        : (result.isNewRegistration
+                            ? 'Perekaman & Verifikasi Berhasil'
+                            : 'Verifikasi Sukses'))
+                    : 'Proses Gagal',
+                style: const TextStyle(fontSize: 16),
+              ),
+            ),
           ],
         ),
         content: Column(
@@ -245,6 +288,23 @@ class _VerificationScreenState extends State<VerificationScreen> {
                 ),
               ),
             const SizedBox(height: 12),
+            if (result.isNewRegistration)
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  '★ Wajah Baru Berhasil Didaftarkan ke Database BPJS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueAccent,
+                  ),
+                ),
+              ),
             Text('Nama: ${result.patientName ?? _patient?.nama ?? "-"}',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             Text('NIK: ${_patient?.nik ?? _nikController.text}'),
@@ -289,12 +349,13 @@ class _VerificationScreenState extends State<VerificationScreen> {
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF088A76);
+    final isRegistration = _currentMode == VerificationMode.registration;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: const Text('Verifikasi Wajah Bedside'),
-        backgroundColor: primaryColor,
+        title: Text(isRegistration ? 'Pendaftaran Wajah Baru' : 'Verifikasi Wajah Bedside'),
+        backgroundColor: isRegistration ? const Color(0xFF2E4057) : primaryColor,
         foregroundColor: Colors.white,
         actions: [
           IconButton(
@@ -311,6 +372,59 @@ class _VerificationScreenState extends State<VerificationScreen> {
       ),
       body: Column(
         children: [
+          // Mode Toggle Pills (Allows switching directly on camera screen)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            color: Colors.grey.shade100,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _currentMode = VerificationMode.verification),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: !isRegistration ? primaryColor : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Verifikasi Kehadiran',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: !isRegistration ? Colors.white : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _currentMode = VerificationMode.registration),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isRegistration ? const Color(0xFF2E4057) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Daftar Wajah Baru',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isRegistration ? Colors.white : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // NIK Input & Search Row
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -329,17 +443,20 @@ class _VerificationScreenState extends State<VerificationScreen> {
                         _searchNik();
                       }
                     },
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'No. BPJS / NIK Pasien',
                       hintText: '16 digit NIK atau 13 digit No Kartu',
                       isDense: true,
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      prefixIcon: isRegistration
+                          ? const Icon(Icons.person_add_alt, size: 20, color: Color(0xFF2E4057))
+                          : const Icon(Icons.badge, size: 20, color: primaryColor),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.qr_code_scanner, color: primaryColor),
+                  icon: Icon(Icons.qr_code_scanner, color: isRegistration ? const Color(0xFF2E4057) : primaryColor),
                   tooltip: 'Scan Barcode KTP/Kartu BPJS',
                   onPressed: _scanBarcode,
                 ),
@@ -350,7 +467,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.search, color: primaryColor),
+                      : Icon(Icons.search, color: isRegistration ? const Color(0xFF2E4057) : primaryColor),
                   tooltip: 'Cari Pasien',
                   onPressed: _searchNik,
                 ),
@@ -363,15 +480,22 @@ class _VerificationScreenState extends State<VerificationScreen> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.teal.shade50,
+              color: isRegistration ? Colors.blueGrey.shade50 : Colors.teal.shade50,
               child: Row(
                 children: [
-                  const Icon(Icons.person, color: primaryColor, size: 20),
+                  Icon(
+                    isRegistration ? Icons.person_add_alt_1 : Icons.person,
+                    color: isRegistration ? const Color(0xFF2E4057) : primaryColor,
+                    size: 20,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '${_patient!.nama} (${_patient!.noKartu})',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: primaryColor),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: isRegistration ? const Color(0xFF2E4057) : primaryColor,
+                      ),
                     ),
                   ),
                 ],
@@ -414,26 +538,54 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     ),
                   ),
 
-                  // Liveness Banner
+                  // Mode & Liveness Banner
                   Positioned(
                     top: 16,
                     left: 20,
                     right: 20,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _livenessStatusText,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: _guideColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    child: Column(
+                      children: [
+                        if (isRegistration)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 6),
+                            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2E4057).withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.flash_auto, color: Colors.amberAccent, size: 14),
+                                SizedBox(width: 6),
+                                Text(
+                                  '1x Scan: Perekaman + Verifikasi Kehadiran',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.black87,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _livenessStatusText,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _guideColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
 
@@ -443,18 +595,39 @@ class _VerificationScreenState extends State<VerificationScreen> {
                     left: 0,
                     right: 0,
                     child: Center(
-                      child: SizedBox(
-                        width: 72,
-                        height: 72,
-                        child: FloatingActionButton(
-                          backgroundColor: _livenessState == LivenessState.ready
-                              ? Colors.green
-                              : primaryColor,
-                          onPressed: _isVerifying ? null : _captureAndVerify,
-                          child: _isVerifying
-                              ? const CircularProgressIndicator(color: Colors.white)
-                              : const Icon(Icons.camera_alt, size: 36, color: Colors.white),
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 72,
+                            height: 72,
+                            child: FloatingActionButton(
+                              backgroundColor: _livenessState == LivenessState.ready
+                                  ? Colors.green
+                                  : (isRegistration ? const Color(0xFF2E4057) : primaryColor),
+                              onPressed: _isVerifying ? null : _captureAndProcess,
+                              child: _isVerifying
+                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  : Icon(
+                                      isRegistration ? Icons.how_to_reg : Icons.camera_alt,
+                                      size: 34,
+                                      color: Colors.white,
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              isRegistration ? 'Daftarkan & Verifikasi' : 'Verifikasi Wajah',
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

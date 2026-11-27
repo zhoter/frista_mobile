@@ -104,12 +104,16 @@ class HomeScreen extends StatelessWidget {
               icon: Icons.face_unlock_rounded,
               color: Colors.teal,
               title: 'Verifikasi Pasien Bedside',
-              subtitle: 'Scan wajah pasien di ranjang dengan kamera depan/belakang & lampu senter.',
+              subtitle: 'Scan wajah pasien rawat inap untuk validasi kehadiran & SEP BPJS (otomatis daftar jika baru).',
               badgeText: 'Paling Sering Digunakan',
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const VerificationScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const VerificationScreen(
+                      mode: VerificationMode.verification,
+                    ),
+                  ),
                 );
               },
             ),
@@ -133,7 +137,10 @@ class HomeScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => VerificationScreen(initialPatient: patient),
+                        builder: (_) => VerificationScreen(
+                          initialPatient: patient,
+                          mode: VerificationMode.verification,
+                        ),
                       ),
                     );
                   }
@@ -142,17 +149,22 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 14),
 
-            // Card 3: Pendaftaran Wajah Baru (Enrollment)
+            // Card 3: Pendaftaran Wajah Baru (Enrollment) & Langsung Verifikasi
             _buildMenuCard(
               context: context,
               icon: Icons.person_add_alt_1_rounded,
-              color: Colors.blueGrey,
+              color: const Color(0xFF2E4057),
               title: 'Pendaftaran Wajah Baru (Enrollment)',
-              subtitle: 'Ambil foto pasien baru untuk didaftarkan ke biometrik BPJS.',
+              subtitle: 'Ambil foto wajah pasien baru: otomatis rekam biometrik dan langsung verifikasi dalam 1x scan.',
+              badgeText: '1x Scan (Daftar + Verifikasi)',
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const VerificationScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const VerificationScreen(
+                      mode: VerificationMode.registration,
+                    ),
+                  ),
                 );
               },
             ),
@@ -173,7 +185,7 @@ class HomeScreen extends StatelessWidget {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Tips Bedside: Nyalakan icon senter di pojok kanan atas kamera jika ruangan pasien minim cahaya. Pastikan wajah pasien menghadap tegak lurus ke kamera.',
+                      'Tips Bedside: Fitur 1x scan otomatis mendaftarkan wajah pasien yang belum ada di database BPJS dan langsung memvalidasi kehadiran tanpa perlu scan ulang.',
                       style: TextStyle(fontSize: 12, color: Colors.black87),
                     ),
                   ),
